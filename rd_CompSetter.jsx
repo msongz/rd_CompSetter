@@ -3,8 +3,13 @@
 // check it: www.redefinery.com
 // 
 // Name: rd_CompSetter
-// Version: 3.3
+// Version: 3.3 + Patch 1
 // 
+// Patch 1: 2021-Aug
+// add Comp resolution selector
+// add Cinema 4D in renderer list
+// add 999 fps support
+//
 // Description:
 // This script displays a palette with controls for changing the 
 // size, pixel aspect ratio, duration, frame rate, preserve options,
@@ -60,7 +65,7 @@
 	var rdcsePal;	
 	
 	rd_CompSetterData.scriptName = "rd: Composition Setter";
-	rd_CompSetterData.scriptTitle = rd_CompSetterData.scriptName + " v3.3";
+	rd_CompSetterData.scriptTitle = rd_CompSetterData.scriptName + " v3.3 patch1";
 	
 	rd_CompSetterData.strDuration = {en: "Duration:"};
 	rd_CompSetterData.strDurationAsFrames = {en: "frames"};
@@ -71,9 +76,11 @@
 	rd_CompSetterData.strHeight = {en: "Height:"};
 	rd_CompSetterData.strSizeCaption = {en: "px"};
 	rd_CompSetterData.strPAR = {en: "PAR:"};
+	rd_CompSetterData.strResolution = {en: "Resolution:"};
+	rd_CompSetterData.strResolutionOptions = {en: '["Full", "Half", "Third", "Quarter"]'};
 	rd_CompSetterData.strRenderer = {en: "Renderer:"};
-	rd_CompSetterData.strRendererEnums = ["ADBE Advanced 3d", "ADBE Picasso"];
-	rd_CompSetterData.strRendererOptions = {en: '["Don\'t Change", "Classic 3D", "Ray-traced 3D"]'};
+	rd_CompSetterData.strRendererEnums = ["ADBE Advanced 3d", "ADBE Picasso","ADBE Ernst"];
+	rd_CompSetterData.strRendererOptions = {en: '["Don\'t Change", "Classic 3D","Ray-traced 3D","Cinema 4D"]'};
 	rd_CompSetterData.strPreserveFrameRate = {en: "Preserve frame rate when nested or in render queue:"};
 	rd_CompSetterData.strPreserveResolution = {en: "Preserve resolution when nested:"};
 	rd_CompSetterData.strPreserveOptions = {en: '["Don\'t Change", "Preserve", "Don\'t Preserve"]'};
@@ -92,7 +99,7 @@
 	rd_CompSetterData.strMinAE100 = {en: "This script requires Adobe After Effects CS5 or later."};
 	rd_CompSetterData.strHelpText = 
 	{
-		"en": "Copyright (c) 2006-2015 redefinery (Jeffrey R. Almasol). \n" +
+		"en": "Copyright (c) 2006-2021 redefinery (Jeffrey R. Almasol). \n" +
 		"All rights reserved.\n" +
 		"\n" +
 		"This script displays a palette with controls for changing the size, pixel aspect ratio, duration, frame rate, preserve options, motion blur, and renderer of the selected compositions, and all nested compositions (pre-comp layers) in it. When you lengthen the composition's duration, all layers whose out points are at or beyond the end of the composition are also lengthened to the new duration, including layers within pre-comps. You also have the option to change all layers to 2D or 3D.\n" +
@@ -102,7 +109,9 @@
 		"Note: This version of the script requires After Effects CS5 or later. It can be used as a dockable panel by placing the script in a ScriptUI Panels subfolder of the Scripts folder, and then choosing this script from the Window menu.\n" +
 		"\n" +
 		"Originally requested by Stu Maschwitz, Tim Thiessen, and Scott Just.\n" +
-		"Updates requested by Matthew Crnich, Matthew Law, Zach Lovatt, and Steve Kellener.\n"
+		"Updates requested by Matthew Crnich, Matthew Law, Zach Lovatt, and Steve Kellener.\n" +
+		"\n" +
+		"patched by songzmeng"
 	};
 	
 	
@@ -176,6 +185,11 @@
 					opt: Checkbox { text:'" + rd_CompSetter_localize(rd_CompSetterData.strFPS) + "', value:false }, \
 					fld: EditText { text:'29.97', characters:7, preferredSize:[-1,20] }, \
 					uom: StaticText { text:'" + rd_CompSetter_localize(rd_CompSetterData.strFPSCaption) + "' }, \
+				}, \
+				res: Group { \
+					alignment:['fill','top'], alignChildren:['left','center'], \
+					opt: Checkbox { text:'" + rd_CompSetter_localize(rd_CompSetterData.strResolution) + "', value:false }, \
+					lst: DropDownList { properties:{items:" + rd_CompSetter_localize(rd_CompSetterData.strResolutionOptions) + " }, alignment:['left','center'], preferredSize:[-1,20] }, \
 				}, \
 				dur: Group { \
 					alignment:['fill','top'], alignChildren:['left','center'], \
@@ -257,12 +271,13 @@
 			pal.grp.width.opt.preferredSize.width = 
 				pal.grp.height.opt.preferredSize.width = 
 				pal.grp.par.opt.preferredSize.width = 
+				pal.grp.res.opt.preferredSize.width = 
 				pal.grp.dur.opt.preferredSize.width = pal.grp.fps.opt.preferredSize.width;
 			pal.grp.sa.opt.preferredSize.width = 
 				pal.grp.sp.opt.preferredSize.width = 
 				pal.grp.spf.opt.preferredSize.width = pal.grp.asl.opt.preferredSize.width;
 			
-			pal.grp.renderer.lst.selection = pal.grp.preserveFR.lst.selection = pal.grp.preserveRes.lst.selection = pal.grp.layerDim.lst.selection = 0;
+			pal.grp.res.lst.selection = pal.grp.renderer.lst.selection = pal.grp.preserveFR.lst.selection = pal.grp.preserveRes.lst.selection = pal.grp.layerDim.lst.selection = 0;
 			
 			pal.layout.layout(true);
 			pal.grp.minimumSize = pal.grp.size;
@@ -282,6 +297,13 @@
 				this.parent.fld.enabled = state;
 				if (state)
 					this.parent.fld.active = true;
+			};
+			pal.grp.res.opt.onClick = function ()
+			{
+				var state = this.value;
+				this.parent.lst.enabled = state;
+				if (state)
+					this.parent.lst.active = true;
 			};
 			pal.grp.dur.opt.onClick = function ()
 			{
@@ -321,8 +343,8 @@
 				
 				if (isNaN(enteredValue) || (enteredValue <= 1))
 					this.text = "1";
-				else if (enteredValue > 99)
-					this.text = "99";
+				else if (enteredValue > 999)
+					this.text = "999";
 			};
 			
 			pal.grp.dur.fld.onChange = function ()
@@ -399,11 +421,11 @@
 	
 	
 	
-	function rd_CompSetter_compSetRecursively(comp, width, height, par, fps, dur, ren, fr, res, sa, sp, spf, asl, layerDim, recurse)
+	function rd_CompSetter_compSetRecursively(comp, width, height, par, fps, res, dur, ren, pfr, pres, sa, sp, spf, asl, layerDim, recurse)
 	{
 		var layer;
 		var oldCompDur = comp.duration;
-		var i, oldOutPt, isLocked;
+		var i, oldOutPt, isLocked, resFactor;
 		
 		// Change the comp's size
 		if (width !== -1)
@@ -419,6 +441,28 @@
 		if (fps !== -1)
 			comp.frameRate = fps;
 		
+		// Change the comp's resolution
+		if (res !== -1)
+		{
+			switch (res)
+			{
+				case 0:
+					comp.resolutionFactor = [1, 1];
+					break;
+				case 1:
+					comp.resolutionFactor = [2, 2];
+					break;
+				case 2:
+					comp.resolutionFactor = [3, 3];
+					break;
+				case 3:
+					comp.resolutionFactor = [4, 4];
+					break;
+				default:
+					break;
+			}
+		}
+		
 		// Change the comp's duration
 		if (dur !== -1)
 			comp.duration = dur;
@@ -428,10 +472,10 @@
 			comp.renderer = rd_CompSetterData.strRendererEnums[ren];
 		
 		// Change the comp's preserve options
-		if (fr !== -1)
-			comp.preserveNestedFrameRate = (fr === 0);
-		if (res !== -1)
-			comp.preserveNestedResolution = (res === 0);
+		if (pfr !== -1)
+			comp.preserveNestedFrameRate = (pfr === 0);
+		if (pres !== -1)
+			comp.preserveNestedResolution = (pres === 0);
 		
 		// Change the comp's motion blur
 		if (sa !== -1)
@@ -465,7 +509,7 @@
 			
 			// Recurse into pre-comps
 			if (recurse && (layer instanceof AVLayer) && (layer.source !== null) && (layer.source instanceof CompItem))
-				rd_CompSetter_compSetRecursively(layer.source, width, height, par, fps, dur, ren, fr, res, sa, sp, spf, asl, layerDim, recurse);
+				rd_CompSetter_compSetRecursively(layer.source, width, height, par, fps, res, dur, ren, pfr, pres, sa, sp, spf, asl, layerDim, recurse);
 			
 			// Lengthen layer
 			if (dur !== -1)
@@ -506,7 +550,7 @@
 	function rd_CompSetter_doCompSetter()
 	{
 		var proj, selComps, i, comp;
-		var newWidth, newHeight, newPAR, newFPS, newDur, newRenderer, newPreserveFR, newPreserveRes, newSA, newSP, newSPF, newASL, newLayerDim;
+		var newWidth, newHeight, newPAR, newFPS, newRes, newDur, newRenderer, newPreserveFR, newPreserveRes, newSA, newSP, newSPF, newASL, newLayerDim;
 		
 		// Check that a project exists
 		if (app.project === null)
@@ -546,7 +590,9 @@
 			newDur = this.parent.parent.dur.opt.value ? parseFloat(this.parent.parent.dur.fld.text) : -1;
 			if (this.parent.parent.dur.durFrames.value && (newDur !== -1))
 				newDur /= comp.frameRate;
-			
+
+			newRes = this.parent.parent.res.opt.value ? this.parent.parent.res.lst.selection.index : -1;
+
 			newFPS = this.parent.parent.fps.opt.value ? parseFloat(this.parent.parent.fps.fld.text) : -1;
 			
 			newRenderer = this.parent.parent.renderer.lst.selection.index - 1;
@@ -561,7 +607,7 @@
 			
 			newLayerDim = this.parent.parent.layerDim.lst.selection.index - 1;
 			
-			rd_CompSetter_compSetRecursively(comp, newWidth, newHeight, newPAR, newFPS, newDur, newRenderer, newPreserveFR, newPreserveRes, newSA, newSP, newSPF, newASL, newLayerDim, this.parent.parent.recursive.value);
+			rd_CompSetter_compSetRecursively(comp, newWidth, newHeight, newPAR, newFPS, newRes, newDur, newRenderer, newPreserveFR, newPreserveRes, newSA, newSP, newSPF, newASL, newLayerDim, this.parent.parent.recursive.value);
 		}
 		
 		app.endUndoGroup();
@@ -605,6 +651,12 @@
 			if (app.settings.haveSetting("redefinery", "rd_CompSetter_fps"))
 				rdcsePal.grp.fps.fld.text = parseFloat(app.settings.getSetting("redefinery", "rd_CompSetter_fps")).toString();
 			rdcsePal.grp.fps.fld.enabled = rdcsePal.grp.fps.opt.value;
+			
+			if (app.settings.haveSetting("redefinery", "rd_CompSetter_resOpt"))
+				rdcsePal.grp.res.opt.value = (app.settings.getSetting("redefinery", "rd_CompSetter_resOpt") === "false") ? false : true;
+			if (app.settings.haveSetting("redefinery", "rd_CompSetter_res"))
+				rdcsePal.grp.res.lst.selection = parseInt(app.settings.getSetting("redefinery", "rd_CompSetter_res"), 10);
+			rdcsePal.grp.res.lst.enabled = rdcsePal.grp.res.opt.value;
 			
 			if (app.settings.haveSetting("redefinery", "rd_CompSetter_durOpt"))
 				rdcsePal.grp.dur.opt.value = (app.settings.getSetting("redefinery", "rd_CompSetter_durOpt") === "false") ? false : true;
@@ -663,6 +715,8 @@
 				app.settings.saveSetting("redefinery", "rd_CompSetter_par", this.grp.par.fld.text);
 				app.settings.saveSetting("redefinery", "rd_CompSetter_fpsOpt", this.grp.fps.opt.value);
 				app.settings.saveSetting("redefinery", "rd_CompSetter_fps", this.grp.fps.fld.text);
+				app.settings.saveSetting("redefinery", "rd_CompSetter_resOpt", this.grp.res.opt.value);
+				app.settings.saveSetting("redefinery", "rd_CompSetter_res", this.grp.res.lst.selection.index);
 				app.settings.saveSetting("redefinery", "rd_CompSetter_durOpt", this.grp.dur.opt.value);
 				app.settings.saveSetting("redefinery", "rd_CompSetter_dur", this.grp.dur.fld.text);
 				app.settings.saveSetting("redefinery", "rd_CompSetter_durFrames", this.grp.dur.durFrames.value);
