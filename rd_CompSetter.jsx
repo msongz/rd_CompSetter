@@ -3,12 +3,15 @@
 // check it: www.redefinery.com
 //
 // Name: rd_CompSetter
-// Version: 3.3 + Patch 1
+// Version: 3.3 + Patch 1 + StartTime Mod
 //
 // Patch 1: 2021-Aug
 // add Comp resolution selector
 // add Cinema 4D in renderer list
 // add 999 fps support
+//
+// StartTime Mod: 2025
+// add Start Time setting
 //
 // Description:
 // This script displays a palette with controls for changing the
@@ -65,9 +68,10 @@
 	var rdcsePal;
 
 	rd_CompSetterData.scriptName = "rd: Composition Setter";
-	rd_CompSetterData.scriptTitle = rd_CompSetterData.scriptName + " v3.3 patch1";
+	rd_CompSetterData.scriptTitle = rd_CompSetterData.scriptName + " v3.3 patch1 + StartTime";
 
 	rd_CompSetterData.strDuration = {en: "Duration:"};
+	rd_CompSetterData.strStartTime = {en: "Start Time:"}; // [MOD] Added Start Time String
 	rd_CompSetterData.strDurationAsFrames = {en: "frames"};
 	rd_CompSetterData.strDurationAsSecs = {en: "seconds"};
 	rd_CompSetterData.strFPS = {en: "Frame Rate:"};
@@ -111,7 +115,7 @@
 		"Originally requested by Stu Maschwitz, Tim Thiessen, and Scott Just.\n" +
 		"Updates requested by Matthew Crnich, Matthew Law, Zach Lovatt, and Steve Kellener.\n" +
 		"\n" +
-		"patched by songzmeng"
+		"patched by songzmeng, StartTime mod added"
 	};
 
 
@@ -198,6 +202,11 @@
 					durFrames: RadioButton { text:'" + rd_CompSetter_localize(rd_CompSetterData.strDurationAsFrames) + "', value:true }, \
 					durSecs: RadioButton { text:'" + rd_CompSetter_localize(rd_CompSetterData.strDurationAsSecs) + "' }, \
 				}, \
+				startTime: Group { \
+					alignment:['fill','top'], alignChildren:['left','center'], \
+					opt: Checkbox { text:'" + rd_CompSetter_localize(rd_CompSetterData.strStartTime) + "', value:false }, \
+					fld: EditText { text:'0', characters:7, preferredSize:[-1,20] }, \
+				}, \
 				sep: Group { \
 					orientation:'row', alignment:['fill','top'], \
 					rule: Panel { \
@@ -272,7 +281,9 @@
 				pal.grp.height.opt.preferredSize.width =
 				pal.grp.par.opt.preferredSize.width =
 				pal.grp.res.opt.preferredSize.width =
-				pal.grp.dur.opt.preferredSize.width = pal.grp.fps.opt.preferredSize.width;
+				pal.grp.dur.opt.preferredSize.width = 
+				pal.grp.startTime.opt.preferredSize.width = // [MOD] Align StartTime
+				pal.grp.fps.opt.preferredSize.width;
 			pal.grp.sa.opt.preferredSize.width =
 				pal.grp.sp.opt.preferredSize.width =
 				pal.grp.spf.opt.preferredSize.width = pal.grp.asl.opt.preferredSize.width;
@@ -309,6 +320,15 @@
 			{
 				var state = this.value;
 				this.parent.fld.enabled = this.parent.durFrames.enabled = this.parent.durSecs.enabled = state;
+				if (state)
+					this.parent.fld.active = true;
+			};
+
+			// [MOD] StartTime UI Logic
+			pal.grp.startTime.opt.onClick = function ()
+			{
+				var state = this.value;
+				this.parent.fld.enabled = state;
 				if (state)
 					this.parent.fld.active = true;
 			};
@@ -361,6 +381,14 @@
 			{
 				// In frames mode, we need an integer number of frames
 				this.parent.parent.fld.text = parseInt(this.parent.parent.fld.text).toString();
+			};
+
+			// [MOD] StartTime Validation
+			pal.grp.startTime.fld.onChange = function ()
+			{
+				var enteredValue = this.text;
+				if (isNaN(enteredValue))
+					this.text = "0";
 			};
 
 			pal.grp.sa.fld.onChange = function ()
@@ -421,7 +449,7 @@
 
 
 
-	function rd_CompSetter_compSetRecursively(comp, width, height, par, fps, res, dur, ren, pfr, pres, sa, sp, spf, asl, layerDim, recurse)
+	function rd_CompSetter_compSetRecursively(comp, width, height, par, fps, res, dur, ren, pfr, pres, sa, sp, spf, asl, layerDim, startTime, recurse)
 	{
 		var layer;
 		var oldCompDur = comp.duration;
@@ -467,6 +495,10 @@
 		if (dur !== -1)
 			comp.duration = dur;
 
+		// [MOD] Change the comp's start time
+		if (startTime !== -1)
+			comp.displayStartTime = startTime;
+
 		// Change the comp's renderer
 		if (ren !== -1)
 			comp.renderer = rd_CompSetterData.strRendererEnums[ren];
@@ -509,7 +541,7 @@
 
 			// Recurse into pre-comps
 			if (recurse && (layer instanceof AVLayer) && (layer.source !== null) && (layer.source instanceof CompItem))
-				rd_CompSetter_compSetRecursively(layer.source, width, height, par, fps, res, dur, ren, pfr, pres, sa, sp, spf, asl, layerDim, recurse);
+				rd_CompSetter_compSetRecursively(layer.source, width, height, par, fps, res, dur, ren, pfr, pres, sa, sp, spf, asl, layerDim, startTime, recurse);
 
 			// Lengthen layer
 			if (dur !== -1)
@@ -550,7 +582,7 @@
 	function rd_CompSetter_doCompSetter()
 	{
 		var proj, selComps, i, comp;
-		var newWidth, newHeight, newPAR, newFPS, newRes, newDur, newRenderer, newPreserveFR, newPreserveRes, newSA, newSP, newSPF, newASL, newLayerDim;
+		var newWidth, newHeight, newPAR, newFPS, newRes, newDur, newStartTime, newRenderer, newPreserveFR, newPreserveRes, newSA, newSP, newSPF, newASL, newLayerDim;
 
 		// Check that a project exists
 		if (app.project === null)
@@ -591,6 +623,12 @@
 			if (this.parent.parent.dur.durFrames.value && (newDur !== -1))
 				newDur /= comp.frameRate;
 
+			// [MOD] Get Start Time
+			newStartTime = this.parent.parent.startTime.opt.value ? parseFloat(this.parent.parent.startTime.fld.text) : -1;
+			// Use Duration Frames toggle to determine if StartTime is frames or seconds
+			if (this.parent.parent.dur.durFrames.value && (newStartTime !== -1))
+				newStartTime /= comp.frameRate;
+
 			newRes = this.parent.parent.res.opt.value ? this.parent.parent.res.lst.selection.index : -1;
 
 			newFPS = this.parent.parent.fps.opt.value ? parseFloat(this.parent.parent.fps.fld.text) : -1;
@@ -607,7 +645,7 @@
 
 			newLayerDim = this.parent.parent.layerDim.lst.selection.index - 1;
 
-			rd_CompSetter_compSetRecursively(comp, newWidth, newHeight, newPAR, newFPS, newRes, newDur, newRenderer, newPreserveFR, newPreserveRes, newSA, newSP, newSPF, newASL, newLayerDim, this.parent.parent.recursive.value);
+			rd_CompSetter_compSetRecursively(comp, newWidth, newHeight, newPAR, newFPS, newRes, newDur, newRenderer, newPreserveFR, newPreserveRes, newSA, newSP, newSPF, newASL, newLayerDim, newStartTime, this.parent.parent.recursive.value);
 		}
 
 		app.endUndoGroup();
@@ -668,6 +706,14 @@
 				rdcsePal.grp.dur.durSecs.value = (app.settings.getSetting("redefinery", "rd_CompSetter_durSecs") === "false") ? false : true;
 			rdcsePal.grp.dur.fld.enabled = rdcsePal.grp.dur.durFrames.enabled = rdcsePal.grp.dur.durSecs.enabled = rdcsePal.grp.dur.opt.value;
 
+			// [MOD] Load StartTime Settings
+			if (app.settings.haveSetting("redefinery", "rd_CompSetter_startTimeOpt"))
+				rdcsePal.grp.startTime.opt.value = (app.settings.getSetting("redefinery", "rd_CompSetter_startTimeOpt") === "false") ? false : true;
+			if (app.settings.haveSetting("redefinery", "rd_CompSetter_startTime"))
+				rdcsePal.grp.startTime.fld.text = parseFloat(app.settings.getSetting("redefinery", "rd_CompSetter_startTime")).toString();
+			rdcsePal.grp.startTime.fld.enabled = rdcsePal.grp.startTime.opt.value;
+
+
 			if (app.settings.haveSetting("redefinery", "rd_CompSetter_renderer"))
 				rdcsePal.grp.renderer.lst.selection = parseInt(app.settings.getSetting("redefinery", "rd_CompSetter_renderer"), 10);
 			if (app.settings.haveSetting("redefinery", "rd_CompSetter_preserveFR"))
@@ -721,6 +767,10 @@
 				app.settings.saveSetting("redefinery", "rd_CompSetter_dur", this.grp.dur.fld.text);
 				app.settings.saveSetting("redefinery", "rd_CompSetter_durFrames", this.grp.dur.durFrames.value);
 				app.settings.saveSetting("redefinery", "rd_CompSetter_durSecs", this.grp.dur.durSecs.value);
+
+				// [MOD] Save StartTime Settings
+				app.settings.saveSetting("redefinery", "rd_CompSetter_startTimeOpt", this.grp.startTime.opt.value);
+				app.settings.saveSetting("redefinery", "rd_CompSetter_startTime", this.grp.startTime.fld.text);
 
 				app.settings.saveSetting("redefinery", "rd_CompSetter_renderer", this.grp.renderer.lst.selection.index);
 				app.settings.saveSetting("redefinery", "rd_CompSetter_preserveFR", this.grp.preserveFR.lst.selection.index);
