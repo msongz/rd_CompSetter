@@ -7,3 +7,6 @@ batch setup comps in Ae (fans maintain version).
 - add 999 fps support
 
 ![](screenshot/patch1.png)
+
+# patch 2
+- add comp startTime
